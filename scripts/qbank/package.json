@@ -1,0 +1,17 @@
+{
+  "name": "gulfmed-qbank-pipeline",
+  "private": true,
+  "type": "module",
+  "description": "Offline pipeline: PDF topic coverage -> original MCQ generation -> Supabase draft seed",
+  "scripts": {
+    "extract": "node 1-extract.mjs",
+    "generate": "node 2-generate.mjs",
+    "seed": "node 3-seed.mjs"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.129.0",
+    "@supabase/supabase-js": "^2.117.2",
+    "pdf-parse": "^2.4.5"
+  },
+  "engines": { "node": ">=20" }
+}
