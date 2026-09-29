@@ -220,6 +220,14 @@ async function runTopic(subject, topic, coverage, progress, stats) {
         console.error(`\nStopping: ${e.message}\nCheck ANTHROPIC_API_KEY and QBANK_MODEL (currently ${MODEL}).`);
         process.exit(1);
       }
+      // network problems: show the real cause once and stop, instead of retrying every chapter
+      if (e?.constructor?.name === 'APIConnectionError' || /connection error/i.test(e?.message || '')) {
+        const cause = e.cause?.cause?.code || e.cause?.code || e.cause?.message || 'unknown';
+        console.error(`\nCannot reach the Anthropic API (${process.env.ANTHROPIC_BASE_URL || 'https://api.anthropic.com'}).`);
+        console.error(`Underlying cause: ${cause}`);
+        console.error('Check your internet/VPN/firewall, and that ANTHROPIC_BASE_URL is not set to something unexpected.');
+        process.exit(1);
+      }
       failures++; stats.apiErrors++;
       console.warn(`  ! ${topic.chapter}: ${e.message} (attempt ${failures}/5)`);
       continue;
