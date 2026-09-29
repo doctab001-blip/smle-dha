@@ -30,12 +30,13 @@ cd scripts/qbank && npm install
 # 1. topic coverage from your PDFs (about 1 minute)
 npm run extract
 
+export ANTHROPIC_API_KEY=sk-ant-...        # from console.anthropic.com
+
 # 2a. QUICK START — 50 questions per subject (300 total), every explanation ≥ 500 words
 npm run generate:50                        # → out/qbank_seed-50.json
 SUPABASE_SERVICE_ROLE_KEY=... npm run seed:50      # or: SEED_FILE=out/qbank_seed-50.json npm run seed -- --sql
 
 # 2b. full bank — try one subject first and review it
-export ANTHROPIC_API_KEY=sk-ant-...        # from console.anthropic.com
 SUBJECTS="Pediatrics" npm run generate     # resumable: re-run to continue after any stop
 npm run generate                           # then all subjects (about 1,200 questions)
 
