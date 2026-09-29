@@ -2,10 +2,10 @@
 import { useState } from 'react';
 import { useStartSession } from '@/components/StartSession';
 
-export default function QBankForm({ subjects }) {
+export default function QBankForm({ subjects, defaultExam = '' }) {
   const [selected, setSelected] = useState(() => subjects.filter((s) => s.count > 0).map((s) => s.slug));
   const [count, setCount] = useState(20);
-  const [exam, setExam] = useState('');
+  const [exam, setExam] = useState(defaultExam);
   const [unseen, setUnseen] = useState(false);
   const { start, busy, error } = useStartSession();
 

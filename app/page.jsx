@@ -1,75 +1,81 @@
 import Link from 'next/link';
-import { SITE_NAME } from '@/lib/constants';
+import SiteHeader, { SiteFooter } from '@/components/SiteHeader';
+import { EXAMS } from '@/lib/exams';
+
+export const dynamic = 'force-dynamic';
 
 const FEATURES = [
-  {
-    title: 'Clinical-vignette question bank',
-    body: 'Exam-style MCQs across Medicine, Surgery, Pediatrics, OBGYN, Preventive Medicine & Ethics and Psychiatry — with regional topics like sickle cell disease, MERS-CoV, consanguinity and Ramadan fasting.',
-  },
-  {
-    title: 'Tutor mode with instant feedback',
-    body: 'See whether you were right straight away, read a full explanation of every option, and compare yourself with how other candidates answered.',
-  },
-  {
-    title: 'Timed SMLE & DHA mocks',
-    body: 'Full-length timed blocks in the SMLE (200 questions) and DHA (150 questions) formats. Answers stay hidden until you submit — just like the real exam.',
-  },
-  {
-    title: 'High-yield notes, always open',
-    body: 'Every chapter and note is unlocked from day one. Each question links to the note that covers it, so you can revise the topic straight away.',
-  },
-  {
-    title: 'Spaced repetition revision',
-    body: 'Questions you get wrong come back sooner, and ones you master fade out — so your revision time goes where it counts.',
-  },
-  {
-    title: 'Performance analytics',
-    body: 'Overall accuracy, your percentile against other users, and a subject radar showing your strong and weak areas.',
-  },
+  ['Clinical-vignette questions', 'Exam-style single-best-answer MCQs across all six subjects, with a full explanation of every option.'],
+  ['Tutor and timed mock modes', 'Learn with instant feedback, or sit a strict, full-length timed block with answers hidden until you submit.'],
+  ['Everything unlocked', 'Every subject, chapter and high-yield note is open from day one. Study in any order.'],
+  ['Spaced-repetition revision', 'Questions you miss come back sooner, so your time goes to your weak areas.'],
+  ['Performance analytics', 'Accuracy by subject, weak-topic re-tests, and your percentile against other candidates.'],
+  ['Built for the Gulf', 'Sickle cell, G6PD, MERS-CoV, Hajj, Ramadan fasting and consanguinity are taught in regional context.'],
 ];
 
-export default function Landing() {
+function ExamCard({ exam }) {
+  return (
+    <div className="exam-card">
+      <div className="exam-card-top">
+        <span className="pill brand">{exam.country}</span>
+        <span className="exam-code">{exam.short}</span>
+      </div>
+      <h3>{exam.name}</h3>
+      <p>{exam.tagline}</p>
+      <ul className="ticks">
+        <li>Full-length {exam.mockQuestions}-question timed mock</li>
+        <li>Tutor mode with explanations and high-yield notes</li>
+        <li>{exam.regional[0]}</li>
+      </ul>
+      <Link href={`/${exam.code}`} className="btn exam-card-btn">Prepare for the {exam.short} →</Link>
+    </div>
+  );
+}
+
+export default function Home() {
   return (
     <>
-      <header className="topbar">
-        <div className="topbar-inner">
-          <Link href="/" className="brand">{SITE_NAME}</Link>
-          <div className="spacer" />
-          <Link href="/login" className="btn sm secondary" style={{ background: 'transparent', color: '#fff', borderColor: 'rgba(255,255,255,.5)' }}>
-            Sign in
-          </Link>
-        </div>
-      </header>
+      <SiteHeader />
 
       <section className="hero">
         <div className="hero-inner">
-          <h1>Pass the SMLE and DHA licensing exams with focused, exam-style practice</h1>
+          <p className="eyebrow">For MBBS graduates seeking GP registration in the Gulf</p>
+          <h1>Pass your Gulf medical licensing exam with focused, exam-style practice</h1>
           <p>
-            A clean, distraction-free question bank for MBBS graduates preparing for Saudi and UAE general
-            practitioner registration.
+            A clean, distraction-free question bank with Prometric-style mocks, detailed explanations and high-yield
+            notes — built around the clinical realities of Saudi Arabia and the UAE.
           </p>
-          <div className="actions" style={{ marginTop: 28 }}>
-            <Link href="/login?mode=signup" className="btn">Create a free account</Link>
-            <Link href="/login" className="btn secondary">I already have an account</Link>
-          </div>
         </div>
       </section>
 
       <main className="container">
-        <div className="grid grid-2" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(290px, 1fr))' }}>
-          {FEATURES.map((f) => (
-            <div key={f.title} className="card feature">
-              <h3>{f.title}</h3>
-              <p>{f.body}</p>
-            </div>
-          ))}
-        </div>
+        <section className="exam-select" aria-labelledby="choose-exam">
+          <h2 id="choose-exam">Which exam are you preparing for?</h2>
+          <p className="muted">Pick one to start. You can switch or study for both at any time from your dashboard.</p>
+          <div className="exam-cards">
+            <ExamCard exam={EXAMS.smle} />
+            <ExamCard exam={EXAMS.dha} />
+          </div>
+        </section>
+
+        <section style={{ marginTop: 48 }}>
+          <h2>Everything you need, nothing you don&apos;t</h2>
+          <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))' }}>
+            {FEATURES.map(([title, body]) => (
+              <div key={title} className="card feature">
+                <h3>{title}</h3>
+                <p>{body}</p>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <p className="muted" style={{ textAlign: 'center', marginTop: 32 }}>
+          Already have an account? <Link href="/login">Sign in</Link>
+        </p>
       </main>
 
-      <footer className="footer">
-        {SITE_NAME} is an independent study resource and is not affiliated with the Saudi Commission for Health
-        Specialties (SCFHS), the Dubai Health Authority (DHA), DOH or MOHAP.
-      </footer>
+      <SiteFooter />
     </>
   );
 }

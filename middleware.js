@@ -1,7 +1,11 @@
 import { NextResponse } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 
-const PUBLIC_PATHS = ['/', '/login', '/auth'];
+// Signed-in area. Everything else (/, /smle, /dha, /login, /auth/*) is public.
+const PROTECTED = ['/dashboard', '/qbank', '/mock', '/revision', '/notes', '/flagged', '/session'];
+const EXAMS = ['smle', 'dha'];
+
+const isProtected = (path) => PROTECTED.some((p) => path === p || path.startsWith(`${p}/`));
 
 export async function middleware(request) {
   let response = NextResponse.next({ request });
@@ -24,21 +28,28 @@ export async function middleware(request) {
   );
 
   const { data: { user } } = await supabase.auth.getUser();
-  const path = request.nextUrl.pathname;
-  const isPublic = PUBLIC_PATHS.some((p) => (p === '/' ? path === '/' : path.startsWith(p)));
+  const { pathname, searchParams } = request.nextUrl;
 
-  if (!user && !isPublic) {
+  // Not signed in → protected pages go to /login (remembering where they were headed).
+  if (!user && isProtected(pathname)) {
     const url = request.nextUrl.clone();
     url.pathname = '/login';
-    url.searchParams.set('next', path);
+    url.search = '';
+    url.searchParams.set('next', pathname);
     return NextResponse.redirect(url);
   }
-  if (user && (path === '/' || path === '/login')) {
+
+  // Already signed in and clicked "Start practising" on /login?exam=… → straight to the
+  // dashboard, carrying the exam so it becomes their active context.
+  if (user && pathname === '/login') {
     const url = request.nextUrl.clone();
+    const exam = searchParams.get('exam');
     url.pathname = '/dashboard';
     url.search = '';
+    if (EXAMS.includes(exam)) url.searchParams.set('exam', exam);
     return NextResponse.redirect(url);
   }
+
   return response;
 }
 

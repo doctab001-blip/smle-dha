@@ -5,23 +5,38 @@ import Radar from '@/components/Radar';
 import SessionsTable from '@/components/SessionsTable';
 import WeakTopics from '@/components/WeakTopics';
 import { WEAK_THRESHOLD } from '@/lib/constants';
+import ExamSwitcher from '@/components/ExamSwitcher';
+import StartSessionButton from '@/components/StartSession';
+import { EXAMS, isExam } from '@/lib/exams';
 
 export const metadata = { title: 'Dashboard' };
 export const dynamic = 'force-dynamic';
 
-export default async function Dashboard() {
+export default async function Dashboard({ searchParams }) {
+  const { exam: examParam } = await searchParams;
   const supabase = await createClient();
   const nowIso = new Date().toISOString();
+  const { data: { user } } = await supabase.auth.getUser();
 
-  const [perfRes, pctRes, cohortRes, dueRes, flagRes, sessRes, profRes, topicRes] = await Promise.all([
+  // Active exam context (users.target_exam). Arriving from /smle or /dha via ?exam= switches it.
+  let { data: profile } = await supabase.from('users').select('full_name, target_exam').eq('id', user.id).maybeSingle();
+  if (isExam(examParam) && profile && profile.target_exam !== examParam) {
+    await supabase.from('users').update({ target_exam: examParam }).eq('id', user.id);
+    profile = { ...profile, target_exam: examParam };
+  }
+  const examCode = profile?.target_exam || 'smle';
+  const exam = EXAMS[examCode] || EXAMS.smle;
+
+  const [perfRes, pctRes, cohortRes, dueRes, flagRes, sessRes, topicRes, mockRes] = await Promise.all([
     supabase.from('v_my_subject_performance').select('*'),
     supabase.rpc('get_my_percentile'),
     supabase.rpc('get_cohort_subject_accuracy'),
     supabase.from('user_question_state').select('question_id', { count: 'exact', head: true }).gt('srs_box', 0).lte('due_at', nowIso),
     supabase.from('user_question_state').select('question_id', { count: 'exact', head: true }).eq('is_flagged', true),
     supabase.from('study_sessions').select('id, mode, mock_format, status, started_at, expires_at, score_correct, score_total, question_ids').order('started_at', { ascending: false }).limit(8),
-    supabase.from('users').select('full_name').maybeSingle(),
     supabase.from('v_my_topic_performance').select('*'),
+    supabase.from('study_sessions').select('id, started_at, score_correct, score_total').eq('mode', 'mock')
+      .eq('mock_format', exam.mockFormat).eq('status', 'submitted').order('started_at', { ascending: false }).limit(20),
   ]);
 
   const perf = perfRes.data || [];
@@ -31,7 +46,10 @@ export default async function Dashboard() {
   const due = dueRes.count || 0;
   const flagged = flagRes.count || 0;
   const sessions = sessRes.data || [];
-  const name = profRes.data?.full_name;
+  const name = profile?.full_name;
+  const mocks = (mockRes.data || []).filter((m) => m.score_total);
+  const mockPct = (m) => Math.round((100 * m.score_correct) / m.score_total);
+  const bestMock = mocks.length ? Math.max(...mocks.map(mockPct)) : null;
   const topics = topicRes.data || [];
 
   const answered = pct.answered || 0;
@@ -43,11 +61,11 @@ export default async function Dashboard() {
       <div className="page-head">
         <div>
           <h1>{name ? `Welcome back, ${name.split(' ')[0]}` : 'Your dashboard'}</h1>
-          <p>Track your progress across all six subjects.</p>
+          <p>{exam.name} preparation · all six subjects are open.</p>
         </div>
         <div className="actions">
+          <ExamSwitcher userId={user.id} current={examCode} />
           <Link href="/qbank" className="btn">Start practising</Link>
-          <Link href="/mock" className="btn secondary">Take a mock</Link>
         </div>
       </div>
 
@@ -78,6 +96,33 @@ export default async function Dashboard() {
             {due ? <Link href="/revision">Start revision set →</Link> : `${flagged} flagged`}
           </div>
         </div>
+      </div>
+
+      <div className="card exam-panel" style={{ marginTop: 16 }}>
+        <div className="actions">
+          <div>
+            <div className="section-title" style={{ marginBottom: 4 }}>{exam.short} mock exam · {exam.country}</div>
+            <h2 style={{ margin: 0 }}>{exam.mockQuestions}-question timed block</h2>
+            <p className="muted small" style={{ margin: '4px 0 0' }}>
+              {mocks.length
+                ? `${mocks.length} ${exam.short} mock${mocks.length > 1 ? 's' : ''} completed · best ${bestMock}% · last ${mockPct(mocks[0])}%`
+                : `You haven't sat an ${exam.short} mock yet. Answers stay hidden until you submit, as in the real exam.`}
+            </p>
+          </div>
+          <span className="spacer" />
+          <StartSessionButton args={{ p_mode: 'mock', p_mock_format: exam.mockFormat }} label={`Start ${exam.short} mock`} />
+          <Link href="/mock" className="btn ghost">All mock formats</Link>
+        </div>
+        {mocks.length > 1 && (
+          <div className="mock-trend" aria-label={`${exam.short} mock scores, oldest to newest`}>
+            {[...mocks].reverse().slice(-10).map((m) => (
+              <div key={m.id} className="mock-bar" title={`${new Date(m.started_at).toLocaleDateString('en-GB')}: ${mockPct(m)}%`}>
+                <i style={{ height: `${Math.max(4, mockPct(m))}%`, background: mockPct(m) >= 60 ? 'var(--good)' : 'var(--bad)' }} />
+                <span>{mockPct(m)}</span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="grid grid-2" style={{ marginTop: 16 }}>

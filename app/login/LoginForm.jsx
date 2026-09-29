@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
+import { EXAMS, isExam } from '@/lib/exams';
 
 export default function LoginForm() {
   const params = useSearchParams();
@@ -14,6 +15,8 @@ export default function LoginForm() {
   const [error, setError] = useState(params.get('error') || '');
   const [info, setInfo] = useState('');
   const next = params.get('next') || '/dashboard';
+  const examParam = (params.get('exam') || '').toLowerCase();
+  const exam = isExam(examParam) ? EXAMS[examParam] : null;
 
   async function submit(e) {
     e.preventDefault();
@@ -23,8 +26,10 @@ export default function LoginForm() {
     const supabase = createClient();
     try {
       if (mode === 'signin') {
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        const { data, error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
+        // came from /smle or /dha → make that the active exam context
+        if (exam) await supabase.from('users').update({ target_exam: exam.code }).eq('id', data.user.id);
         router.replace(next);
         router.refresh();
       } else {
@@ -33,7 +38,7 @@ export default function LoginForm() {
           password,
           options: {
             emailRedirectTo: `${window.location.origin}/auth/callback?next=/dashboard`,
-            data: { full_name: fullName },
+            data: { full_name: fullName, ...(exam ? { exam: exam.code } : {}) },
           },
         });
         if (error) throw error;
@@ -54,6 +59,12 @@ export default function LoginForm() {
 
   return (
     <div className="card auth-card">
+      {exam && (
+        <div className="alert info" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <span className="pill brand">{exam.short}</span>
+          <span>Preparing for the {exam.name}. {mode === 'signup' ? 'Your dashboard will be set up for it.' : 'We\'ll switch your dashboard to it.'}</span>
+        </div>
+      )}
       <div className="tabs" role="tablist">
         <button className={mode === 'signin' ? 'on' : ''} onClick={() => setMode('signin')} type="button">Sign in</button>
         <button className={mode === 'signup' ? 'on' : ''} onClick={() => setMode('signup')} type="button">Create account</button>
