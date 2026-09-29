@@ -3,6 +3,8 @@ import { createClient } from '@/lib/supabase/server';
 import { SUBJECTS } from '@/lib/constants';
 import Radar from '@/components/Radar';
 import SessionsTable from '@/components/SessionsTable';
+import WeakTopics from '@/components/WeakTopics';
+import { WEAK_THRESHOLD } from '@/lib/constants';
 
 export const metadata = { title: 'Dashboard' };
 export const dynamic = 'force-dynamic';
@@ -11,7 +13,7 @@ export default async function Dashboard() {
   const supabase = await createClient();
   const nowIso = new Date().toISOString();
 
-  const [perfRes, pctRes, cohortRes, dueRes, flagRes, sessRes, profRes] = await Promise.all([
+  const [perfRes, pctRes, cohortRes, dueRes, flagRes, sessRes, profRes, topicRes] = await Promise.all([
     supabase.from('v_my_subject_performance').select('*'),
     supabase.rpc('get_my_percentile'),
     supabase.rpc('get_cohort_subject_accuracy'),
@@ -19,6 +21,7 @@ export default async function Dashboard() {
     supabase.from('user_question_state').select('question_id', { count: 'exact', head: true }).eq('is_flagged', true),
     supabase.from('study_sessions').select('id, mode, mock_format, status, started_at, expires_at, score_correct, score_total, question_ids').order('started_at', { ascending: false }).limit(8),
     supabase.from('users').select('full_name').maybeSingle(),
+    supabase.from('v_my_topic_performance').select('*'),
   ]);
 
   const perf = perfRes.data || [];
@@ -29,6 +32,7 @@ export default async function Dashboard() {
   const flagged = flagRes.count || 0;
   const sessions = sessRes.data || [];
   const name = profRes.data?.full_name;
+  const topics = topicRes.data || [];
 
   const answered = pct.answered || 0;
   const accuracy = pct.accuracy_pct;
@@ -85,7 +89,7 @@ export default async function Dashboard() {
             cohort={hasCohort ? SUBJECTS.map((s) => cohortMap[s.slug] ?? 0) : null}
           />
           <div className="legend" style={{ justifyContent: 'center' }}>
-            <span><i style={{ background: 'rgba(15,92,110,0.35)', borderColor: '#0f5c6e' }} />You</span>
+            <span><i style={{ background: 'rgba(13,148,136,0.35)', borderColor: '#0d9488' }} />You</span>
             {hasCohort && <span><i style={{ background: 'rgba(123,133,149,0.15)', borderColor: '#9aa3b0' }} />All users</span>}
           </div>
         </div>
@@ -100,7 +104,10 @@ export default async function Dashboard() {
             const acc = row?.accuracy_pct != null ? Number(row.accuracy_pct) : null;
             return (
               <div className="subject-row" key={s.slug}>
-                <span>{s.name}</span>
+                <span>
+                  {s.name}
+                  {acc != null && acc < WEAK_THRESHOLD && (row?.answered ?? 0) >= 3 && <span className="pill bad" style={{ marginLeft: 6 }}>Weak</span>}
+                </span>
                 <span className="muted">{row?.answered ?? 0}</span>
                 <span>
                   {acc != null ? (
@@ -116,6 +123,10 @@ export default async function Dashboard() {
             );
           })}
         </div>
+      </div>
+
+      <div style={{ marginTop: 16 }}>
+        <WeakTopics topics={topics} />
       </div>
 
       <div className="card" style={{ marginTop: 16 }}>

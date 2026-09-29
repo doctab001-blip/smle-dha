@@ -29,10 +29,10 @@ export default function Radar({ axes, mine, cohort }) {
       {cohort && (
         <polygon points={poly(cohort)} fill="rgba(123,133,149,0.12)" stroke="#9aa3b0" strokeWidth="1.5" strokeDasharray="4 3" />
       )}
-      <polygon points={poly(mine)} fill="rgba(15,92,110,0.22)" stroke="#0f5c6e" strokeWidth="2" />
+      <polygon points={poly(mine)} fill="rgba(13,148,136,0.22)" stroke="#0d9488" strokeWidth="2" />
       {mine.map((v, i) => {
         const [x, y] = pt(i, v);
-        return <circle key={i} cx={x} cy={y} r="3.5" fill="#0f5c6e" />;
+        return <circle key={i} cx={x} cy={y} r="3.5" fill="#0d9488" />;
       })}
       {axes.map((label, i) => {
         const a = angle(i);

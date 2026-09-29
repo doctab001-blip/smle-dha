@@ -7,7 +7,7 @@ export const metadata = {
     'Question bank, timed mock exams and high-yield notes for the Saudi Medical Licensing Exam (SMLE) and UAE DHA licensing exams.',
 };
 
-export const viewport = { themeColor: '#0f5c6e' };
+export const viewport = { themeColor: '#0f172a' };
 
 export default function RootLayout({ children }) {
   return (
