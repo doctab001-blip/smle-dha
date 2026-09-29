@@ -160,12 +160,14 @@ async function callModel(prompt) {
     const { default: Anthropic } = await import('@anthropic-ai/sdk');
     client = new Anthropic({ maxRetries: 4 });
   }
-  const msg = await client.messages.create({
+  // Streaming is required by the SDK for long generations (500-word explanations × several questions).
+  const msg = await client.messages.stream({
     model: MODEL,
     max_tokens: 32000,
     system: SYSTEM,
     messages: [{ role: 'user', content: prompt }],
-  });
+  }).finalMessage();
+  if (msg.stop_reason === 'max_tokens') throw new Error('response hit max_tokens — lower BATCH_SIZE');
   return msg.content.filter((b) => b.type === 'text').map((b) => b.text).join('');
 }
 
@@ -213,6 +215,11 @@ async function runTopic(subject, topic, coverage, progress, stats) {
     try {
       arr = parseArray(await callModel(prompt));
     } catch (e) {
+      // configuration errors (bad key, unknown model, bad request) won't fix themselves — stop the whole run
+      if ([400, 401, 403, 404].includes(e?.status)) {
+        console.error(`\nStopping: ${e.message}\nCheck ANTHROPIC_API_KEY and QBANK_MODEL (currently ${MODEL}).`);
+        process.exit(1);
+      }
       failures++; stats.apiErrors++;
       console.warn(`  ! ${topic.chapter}: ${e.message} (attempt ${failures}/5)`);
       continue;
