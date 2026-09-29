@@ -106,7 +106,7 @@ export default async function Dashboard({ searchParams }) {
             <p className="muted small" style={{ margin: '4px 0 0' }}>
               {mocks.length
                 ? `${mocks.length} ${exam.short} mock${mocks.length > 1 ? 's' : ''} completed · best ${bestMock}% · last ${mockPct(mocks[0])}%`
-                : `You haven't sat an ${exam.short} mock yet. Answers stay hidden until you submit, as in the real exam.`}
+                : `You haven't sat ${exam.a} ${exam.short} mock yet. Answers stay hidden until you submit, as in the real exam.`}
             </p>
           </div>
           <span className="spacer" />

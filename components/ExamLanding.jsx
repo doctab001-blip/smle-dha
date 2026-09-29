@@ -25,7 +25,7 @@ export default function ExamLanding({ exam }) {
       <main className="container">
         <div className="grid grid-2">
           <div className="card">
-            <h2>Train in an {exam.short}-style format</h2>
+            <h2>Train in {exam.a} {exam.short}-style format</h2>
             <ul className="ticks">
               <li><strong>{exam.mockQuestions}-question timed mock</strong> with a strict countdown; answers stay hidden until you submit.</li>
               <li><strong>Prometric-style screen:</strong> vignette on the left, options on the right, lab-values sheet and flag-for-review.</li>
