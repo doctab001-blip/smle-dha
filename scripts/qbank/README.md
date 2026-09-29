@@ -30,7 +30,11 @@ cd scripts/qbank && npm install
 # 1. topic coverage from your PDFs (about 1 minute)
 npm run extract
 
-# 2. generate — try one subject first and review it
+# 2a. QUICK START — 50 questions per subject (300 total), every explanation ≥ 500 words
+npm run generate:50                        # → out/qbank_seed-50.json
+SUPABASE_SERVICE_ROLE_KEY=... npm run seed:50      # or: SEED_FILE=out/qbank_seed-50.json npm run seed -- --sql
+
+# 2b. full bank — try one subject first and review it
 export ANTHROPIC_API_KEY=sk-ant-...        # from console.anthropic.com
 SUBJECTS="Pediatrics" npm run generate     # resumable: re-run to continue after any stop
 npm run generate                           # then all subjects (about 1,200 questions)
@@ -41,14 +45,15 @@ SUPABASE_SERVICE_ROLE_KEY=... npm run seed
 SUBJECTS="Pediatrics" npm run seed -- --sql     # → out/seed.sql
 ```
 
-Useful switches: `DRY_RUN=1` (show the prompt or plan without doing anything),
-`QBANK_MODEL` (default `claude-sonnet-5-5`), `BATCH_SIZE` (default 8), `CONCURRENCY` (default 3).
+Useful switches: `PER_SUBJECT` (default 200, e.g. 50), `MIN_EXPLANATION_WORDS` (default 500), `DRY_RUN=1` (show the prompt or plan without doing anything),
+`QBANK_MODEL` (default `claude-sonnet-5-5`), `BATCH_SIZE` (default 4), `CONCURRENCY` (default 3).
 
-**Cost:** about 1,200 questions at roughly 1,500 output tokens each is around 2M output
-tokens. Check current pricing at https://www.anthropic.com/pricing before a full run; a
+**Cost:** with 500-word explanations each question is roughly 1,800–2,200 output tokens, so
+the 50-per-subject run (300 questions) is about 0.6M output tokens and the full 1,200 is about 2.5M. Check current pricing at https://www.anthropic.com/pricing before a full run; a
 one-subject pilot costs about a sixth of that.
 
 ## Quality gates built in
+- Every `explanation_correct` must be at least 500 words (configurable), structured under fixed headings: key clues, why the answer is correct (with guideline), pathophysiology, management, differential diagnosis, exam pearls, and Gulf context. Shorter ones are regenerated.
 - Schema validation: exactly 4 options, rationales for exactly the 3 wrong options, a lead-in question, a minimum length, no "all/none of the above", and a known regional tag. Failing questions are discarded and regenerated.
 - Near-duplicate vignettes are dropped across the whole subject.
 - The answer key is rebalanced so each subject has about 25% each of A, B, C and D. Numeric option lists keep their order.

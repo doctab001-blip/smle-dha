@@ -6,12 +6,16 @@
   "scripts": {
     "extract": "node 1-extract.mjs",
     "generate": "node 2-generate.mjs",
-    "seed": "node 3-seed.mjs"
+    "seed": "node 3-seed.mjs",
+    "generate:50": "PER_SUBJECT=50 node 2-generate.mjs",
+    "seed:50": "SEED_FILE=out/qbank_seed-50.json node 3-seed.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.129.0",
     "@supabase/supabase-js": "^2.117.2",
     "pdf-parse": "^2.4.5"
   },
-  "engines": { "node": ">=20" }
+  "engines": {
+    "node": ">=20"
+  }
 }

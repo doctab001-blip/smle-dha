@@ -11,7 +11,9 @@
 //   ANTHROPIC_API_KEY   required (unless MOCK_RESPONSE_FILE is set)
 //   QBANK_MODEL         default claude-sonnet-5-5
 //   SUBJECTS            optional comma list, e.g. "Pediatrics,General Surgery"
-//   BATCH_SIZE          questions per API call (default 8)
+//   PER_SUBJECT         questions per subject (default 200; e.g. 50) — blueprint scales proportionally
+//   MIN_EXPLANATION_WORDS  minimum words in each explanation_correct (default 500)
+//   BATCH_SIZE          questions per API call (default 4)
 //   CONCURRENCY         parallel API calls (default 3)
 //   DRY_RUN=1           print the first prompt and exit
 //   MOCK_RESPONSE_FILE  testing: use a JSON array file instead of calling the API
@@ -22,11 +24,15 @@ import { BLUEPRINT, checkBlueprint } from './blueprint.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const OUT = path.join(here, 'out');
-const PROGRESS = path.join(OUT, 'progress.json');
-const SEED = path.join(OUT, 'qbank_seed.json');
+
 
 const MODEL = process.env.QBANK_MODEL || 'claude-sonnet-5-5';
-const BATCH_SIZE = Number(process.env.BATCH_SIZE || 8);
+const BATCH_SIZE = Number(process.env.BATCH_SIZE || 4);
+const PER_SUBJECT = Number(process.env.PER_SUBJECT || 200);
+const MIN_WORDS = Number(process.env.MIN_EXPLANATION_WORDS || 500);
+const OUT_TAG = PER_SUBJECT === 200 ? '' : `-${PER_SUBJECT}`;
+const PROGRESS = path.join(OUT, `progress${OUT_TAG}.json`);
+const SEED = path.join(OUT, `qbank_seed${OUT_TAG}.json`);
 const CONCURRENCY = Number(process.env.CONCURRENCY || 3);
 const ONLY = (process.env.SUBJECTS || '').split(',').map((s) => s.trim()).filter(Boolean);
 
@@ -55,7 +61,15 @@ Rules:
 1. Vignette: authentic clinical case — age, sex, presenting complaint, relevant history, vitals, examination, and pertinent labs/imaging (SI units; add conventional units where Gulf labs commonly use them). The vignette ENDS with the question sentence (e.g. "What is the most appropriate next step in management?").
 2. Test application: diagnosis, next best step, management, interpretation — not bare recall.
 3. Exactly 4 options A, B, C, D — plausible, homogeneous, similar length. Never "all/none of the above".
-4. explanation_correct: why the answer is right, citing the relevant current guideline (e.g. AHA/ACC, ESC, NICE, WHO, ADA, IDF-DAR, RCOG, ACOG, ATLS, Saudi MOH, Gulf Health Council).
+4. explanation_correct: a teaching explanation of AT LEAST ${MIN_WORDS} WORDS (count them — shorter answers are rejected) in Markdown with these ### headings:
+   ### Key clues in the vignette — which findings point to the answer and why
+   ### Why <letter> is correct — the reasoning, citing the relevant current guideline by name and year (e.g. AHA/ACC, ESC, NICE, WHO, ADA, IDF-DAR, RCOG, ACOG, ATLS, KDIGO, GINA, GOLD, Saudi MOH, Gulf Health Council)
+   ### Pathophysiology — the mechanism behind the presentation and the treatment
+   ### Management in practice — step-by-step next steps, drug doses where exam-relevant, monitoring, when to refer/escalate
+   ### Differential diagnosis — how to distinguish the closest alternatives
+   ### Exam pearls and pitfalls — the traps examiners set on this topic
+   ### Gulf context — regional epidemiology or practice points (write "Not specific to the region." if none)
+   Be substantive and accurate; do not pad with repetition.
 5. explanation_distractors: an object with exactly the 3 wrong letters, each explaining specifically why that option is wrong in THIS patient.
 6. high_yield_note: 2–3 sentences of core facts for rapid revision.
 7. Where clinically natural, set the case in Saudi Arabia/UAE and include regional specifics (sickle cell, thalassaemia, G6PD, consanguinity, MERS-CoV, Hajj/heat illness, Ramadan fasting, brucellosis, Behçet, Islamic ethics). Do not force it.
@@ -84,7 +98,8 @@ export function validate(q, subject) {
   if (q.vignette.length < 250) errs.push('vignette too short');
   if (Object.values(q.options).some((o) => /\b(all|none) of the above\b/i.test(o))) errs.push('all/none of the above');
   if (new Set(Object.values(q.options).map((o) => o.trim().toLowerCase())).size !== 4) errs.push('duplicate options');
-  if (q.explanation_correct.length < 150) errs.push('explanation too short');
+  const nWords = q.explanation_correct.trim().split(/\s+/).length;
+  if (nWords < MIN_WORDS) errs.push(`explanation ${nWords} words (< ${MIN_WORDS})`);
   if (!REGIONAL_TAGS.includes(q.regional_tag)) errs.push(`unknown regional_tag ${q.regional_tag}`);
   return errs;
 }
@@ -173,6 +188,16 @@ function saveProgress(progress) {
   return saving;
 }
 
+// Scale the 200-question blueprint to PER_SUBJECT (largest-remainder rounding keeps the exact total).
+export function scaleTopics(topics, target) {
+  const total = topics.reduce((a, t) => a + t.count, 0);
+  const raw = topics.map((t) => (t.count * target) / total);
+  const counts = raw.map(Math.floor);
+  let left = target - counts.reduce((a, b) => a + b, 0);
+  raw.map((r, i) => [r - Math.floor(r), i]).sort((a, b) => b[0] - a[0]).slice(0, left).forEach(([, i]) => counts[i]++);
+  return topics.map((t, i) => ({ ...t, count: counts[i] })).filter((t) => t.count > 0);
+}
+
 async function runTopic(subject, topic, coverage, progress, stats) {
   const key = `${subject} || ${topic.chapter}`;
   progress[key] ||= [];
@@ -224,12 +249,12 @@ async function main() {
   const jobs = [];
   for (const s of BLUEPRINT) {
     if (ONLY.length && !ONLY.includes(s.subject)) continue;
-    for (const t of s.topics) {
+    for (const t of scaleTopics(s.topics, PER_SUBJECT)) {
       const cov = coverage?.topics.find((x) => x.subject === s.subject && x.chapter === t.chapter);
       jobs.push(() => runTopic(s.subject, t, cov, progress, stats));
     }
   }
-  console.log(`Model ${MODEL} · ${jobs.length} chapters · batch ${BATCH_SIZE} · concurrency ${CONCURRENCY}`);
+  console.log(`Model ${MODEL} · ${PER_SUBJECT}/subject · explanations ≥${MIN_WORDS} words · ${jobs.length} chapters · batch ${BATCH_SIZE} · concurrency ${CONCURRENCY}`);
   let next = 0;
   await Promise.all(Array.from({ length: CONCURRENCY }, async () => { while (next < jobs.length) await jobs[next++](); }));
   await saving;
@@ -237,7 +262,7 @@ async function main() {
   // assemble the seed: strip _meta, rebalance answer letters per subject, keep blueprint order
   const seed = [];
   for (const s of BLUEPRINT) {
-    const qs = s.topics.flatMap((t) => progress[`${s.subject} || ${t.chapter}`] || []);
+    const qs = scaleTopics(s.topics, PER_SUBJECT).flatMap((t) => (progress[`${s.subject} || ${t.chapter}`] || []).slice(0, t.count));
     const clean = qs.map(({ _meta, ...q }) => q);
     seed.push(...rebalance(clean, s.subject.length * 7919));
   }
@@ -247,7 +272,7 @@ async function main() {
   for (const s of BLUEPRINT) {
     const n = seed.filter((q) => q.subject === s.subject).length;
     const dist = Object.fromEntries(['A', 'B', 'C', 'D'].map((k) => [k, seed.filter((q) => q.subject === s.subject && q.correct_option === k).length]));
-    console.log(`  ${s.subject.padEnd(30)} ${String(n).padStart(4)}/200   key ${JSON.stringify(dist)}`);
+    console.log(`  ${s.subject.padEnd(30)} ${String(n).padStart(4)}/${PER_SUBJECT}   key ${JSON.stringify(dist)}`);
   }
   console.log(`  kept ${stats.kept} · rejected ${stats.rejected} · duplicates ${stats.duplicates} · API/parse errors ${stats.apiErrors}`);
   console.log(`\nWrote ${path.relative(process.cwd(), SEED)} (${seed.length} questions). Review, then run: node 3-seed.mjs`);
